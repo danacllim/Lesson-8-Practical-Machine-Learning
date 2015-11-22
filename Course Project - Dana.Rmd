@@ -1,0 +1,89 @@
+Practical Machine Learning Project
+========================================================
+**By Dana Lim**
+
+
+### Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. Previous work tend to predict particular activities but not how well the activity is performed. In this project, data from accelerometers of 6 participants performing five different executions of Unilateral Dumbbell Biceps Curl: Exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E) will be modeled. The objective is to predict which execution of the exercise is being done given the features.  
+
+Data for this project is from:  
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+### Preparation & Data Loading
+
+```{r libraries, warning = FALSE, results = "hide"}
+library(caret); library(randomForest); library(rpart); library(rattle) 
+set.seed(1234); # for Reproduceability
+train <- read.csv("pml-training.csv", na.strings = c("NA","","#DIV/0!"))
+test <- read.csv("pml-testing.csv", na.strings = c("NA","","#DIV/0!"))
+```
+
+Both training and test data are read into separate datasets with "NA", blanks, and "#DIV/0!"  set to *NA*. A seed for pseudo-random generator is set for reproduceability. 
+
+### Pre-processing Of Training Data
+
+The first seven columns (e.g. user_names, raw_timestamp_part_1 etc) are removed as they are not data related to body movement.
+
+``` {r}
+# Remove unwanted columns
+train <- train[, -(1:7)]
+```
+
+Variables with near zero variances are discarded.
+
+``` {r}
+# remove near zero variance column
+near0 <- nearZeroVar(train, saveMetrics = TRUE); train <- train[, !near0$nzv] 
+```
+
+Finally variables with more then 50% missing data are removed. 
+
+``` {r}
+# remove columns with more than 50% NAs
+d <- dim(train)
+v <- vector(length = d[2])
+for (i in 1:d[2]) {  v[i] <- ((sum(is.na(train[,i]))/d[1]) < 0.50) }
+train <- train[, v]
+d2 <- dim(train); var <- d2[2] -1;
+```
+
+### Models & Cross Validation
+
+The two models used are: Decision Tree and Random Forest. Three-fold cross validation is performed to have a more accurate estimate of the out of sample error.
+
+``` {r Train, cache = TRUE}
+# Set cross validation params
+cv_params <- trainControl(method = "cv", number = 3)
+modelDT <- train(classe ~ ., data=train, method="rpart", trControl = cv_params)
+modelRF <- train(classe ~ ., data=train, method="rf", trControl = cv_params)
+DTA <- signif(max(modelDT$results$Accuracy),3); 
+RFA <- signif(max(modelRF$results$Accuracy),3); OSE <- (1 - RFA)*100
+```
+
+### Model Comparison & Estimation of Out-Of-Sample Error
+
+Accuracy is higher for Random Forest model (`r RFA`) compared to Decision Tree model (`r DTA`). The out-of-sample-error for Random Forest model is estimated to be `r OSE`%
+
+### Prediction
+
+``` {r Predict, warning = FALSE, results = "hide"}
+Pred <- predict(modelRF, test)
+```
+
+Prediction for classe is done using the Random Forest Model.
+
+### Generation of the files to be submitted is made through the provided function
+
+``` {r submit}
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+
+pml_write_files(Pred)
+```
